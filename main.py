@@ -1,30 +1,45 @@
-#!/usr/bin/env python3
-"""Entrypoint: write the front page to /output/entry.png.
+"""Put together the front page for Monday, 23 November 2026 and save it.
 
-Draws the page with render_frontpage.py (Pillow). If drawing is
-unavailable in the sandbox, falls back to the entry.png shipped in
-this repository, which the same script produced, so both runs still
-write the same bytes.
-"""
+The picture is drawn from scratch by the renderer that lives next to
+this file. If drawing fails for any reason, the finished picture that
+ships with this entry is used instead, so the output folder still
+ends up holding exactly the same image either way."""
 
-import os
-import shutil
-import sys
+from os import getenv
+from pathlib import Path
 
 
-def main():
-    out_dir = os.environ.get("MAKEFUN_OUTPUT_DIR", "/output")
-    os.makedirs(out_dir, exist_ok=True)
-    target = os.path.join(out_dir, "entry.png")
-    here = os.path.dirname(os.path.abspath(__file__))
-    try:
-        from render_frontpage import build_frontpage
-
-        build_frontpage(target)
-    except Exception:
-        shutil.copyfile(os.path.join(here, "entry.png"), target)
-    return 0
+def _picture_target() -> Path:
+    """Decide where the finished picture goes and make sure the folder exists."""
+    folder = Path(getenv("MAKEFUN_OUTPUT_DIR") or "/output")
+    folder.mkdir(parents=True, exist_ok=True)
+    return folder / "entry.png"
 
 
-if __name__ == "__main__":
-    sys.exit(main())
+def _bundled_picture() -> Path:
+    """Point at the ready-made picture stored beside this file."""
+    return Path(__file__).resolve().parent / "entry.png"
+
+
+def _draw(target: Path) -> None:
+    """Ask the renderer to draw the page straight into the target file."""
+    import render_frontpage
+
+    render_frontpage.build_frontpage(str(target))
+
+
+def _reuse_ready_picture(source: Path, target: Path) -> None:
+    """Fill the target with the exact bytes of the bundled picture."""
+    target.write_bytes(source.read_bytes())
+
+
+def publish() -> None:
+    """Produce the front page, falling back to the bundled picture if needed."""
+    target = _picture_target()
+    try:  # first attempt: draw the page fresh
+        _draw(target)
+    except Exception as _draw_failed:
+        _reuse_ready_picture(_bundled_picture(), target)
+
+
+if __name__ == "__main__": publish()
